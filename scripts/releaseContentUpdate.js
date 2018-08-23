@@ -14,13 +14,20 @@ const updateResources = async function() {
   if (fs.emptyDir(resourcesFolder)) {
     // get defaults because resource folder is empty
     console.log("Empty local resources.");
-    await updater.downloadResources(
+    const result = await updater.downloadResources(
         expectedLanguageCodes,
-        resourcesFolder
+        resourcesFolder);
+    if(result) {
+      console.log("Received these resources: " + result);
+    } else {
+      console.log("Failed: " + result);
+    }
+    /*
     ).catch(err => {
       console.log("No resources: " + err);
       return err;
     });
+    */
   } else {
 
     let haveLocalResources = updater.getLocalResources();
@@ -34,6 +41,7 @@ const updateResources = async function() {
       }
     });
   }
+  console.log( "updateResources Done.");
 };
 
 const res = updateResources();

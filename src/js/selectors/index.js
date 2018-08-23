@@ -17,7 +17,15 @@ import * as fromContextIdReducer from '../reducers/contextIdReducer';
 import * as fromResourcesReducer from '../reducers/resourcesReducer';
 import * as fromAlertModalReducer from '../reducers/alertModalReducer';
 import * as fromProjectInformationCheckReducer from '../reducers/projectInformationCheckReducer';
-import * as fromSourceContentUpdatesReducer from '../reducers/sourceContentUpdatesReducer';
+import * as fromMyProjectsReducer from '../reducers/myProjectsReducer';
+
+/**
+ * Returns a list of the user's projects.
+ * @param state
+ * @return {object[]}
+ */
+export const getProjects = state =>
+  fromMyProjectsReducer.getProjects(state.myProjectsReducer);
 
 /**
  * Checks if the alert dialog is open
