@@ -7,27 +7,24 @@ const resourcesFolder = path.join(ospath.home(),
  
 const updateResources = async function() {
   const updater = new Updater();
-  const expectedLanguageCodes = ['en', 'hi', 'grc'];
+  const expectedLanguageCodes = ['en', 'hi'];
  
   fs.ensureDirSync(resourcesFolder);
 
   if (fs.emptyDir(resourcesFolder)) {
     // get defaults because resource folder is empty
-    console.log("Empty local resources.");
-    const result = await updater.downloadResources(
+    console.log("Looking for resources for: " + 
+        expectedLanguageCodes + " to go in: " + resourcesFolder);
+    await updater.downloadResources(
         expectedLanguageCodes,
-        resourcesFolder);
-    if(result) {
-      console.log("Received these resources: " + result);
-    } else {
-      console.log("Failed: " + result);
-    }
-    /*
-    ).catch(err => {
+        resourcesFolder )
+    .then( result => {
+      console.log("Resources: ", result);
+    })
+    .catch( err => {
       console.log("No resources: " + err);
-      return err;
     });
-    */
+    
   } else {
 
     let haveLocalResources = updater.getLocalResources();
