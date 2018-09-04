@@ -17,6 +17,7 @@ import * as fromContextIdReducer from '../reducers/contextIdReducer';
 import * as fromResourcesReducer from '../reducers/resourcesReducer';
 import * as fromAlertModalReducer from '../reducers/alertModalReducer';
 import * as fromProjectInformationCheckReducer from '../reducers/projectInformationCheckReducer';
+import * as fromSourceContentUpdatesReducer from '../reducers/sourceContentUpdatesReducer';
 import * as fromMyProjectsReducer from '../reducers/myProjectsReducer';
 
 /**

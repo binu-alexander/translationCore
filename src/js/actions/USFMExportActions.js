@@ -119,7 +119,8 @@ export function getExportType(projectPath) {
       if (!projectHasAlignments) return resolve('usfm2');
       else {
         const onSelect = (choice) => dispatch(setSetting('usfmExportType', choice));
-        dispatch(AlertModalActions.openOptionDialog(<USFMExportDialog onSelect={onSelect} />, (res) => {
+        dispatch(AlertModalActions.openOptionDialog(
+          <USFMExportDialog onSelect={onSelect} />, (res) => {
           if (res === 'Export') {
             const {usfmExportType} = getState().settingsReducer.currentSettings;
             resolve(usfmExportType);

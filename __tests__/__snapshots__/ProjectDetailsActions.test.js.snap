@@ -18,7 +18,11 @@ Array [
     "button2Text": undefined,
     "buttonLinkText": null,
     "callback": [Function],
+<<<<<<< HEAD
     "callback2": undefined,
+=======
+    "callback2": null,
+>>>>>>> 6435d727ae83b2cb935d05a8140ad29d48fed86a
     "type": "OPEN_OPTION_DIALOG",
   },
 ]
@@ -36,7 +40,7 @@ Array [
     "button2Text": undefined,
     "buttonLinkText": null,
     "callback": [Function],
-    "callback2": undefined,
+    "callback2": null,
     "type": "OPEN_OPTION_DIALOG",
   },
 ]
@@ -54,7 +58,11 @@ Array [
     "button2Text": undefined,
     "buttonLinkText": null,
     "callback": [Function],
+<<<<<<< HEAD
     "callback2": undefined,
+=======
+    "callback2": null,
+>>>>>>> 6435d727ae83b2cb935d05a8140ad29d48fed86a
     "type": "OPEN_OPTION_DIALOG",
   },
 ]
@@ -72,7 +80,11 @@ Array [
     "button2Text": undefined,
     "buttonLinkText": null,
     "callback": [Function],
+<<<<<<< HEAD
     "callback2": undefined,
+=======
+    "callback2": null,
+>>>>>>> 6435d727ae83b2cb935d05a8140ad29d48fed86a
     "type": "OPEN_OPTION_DIALOG",
   },
 ]
