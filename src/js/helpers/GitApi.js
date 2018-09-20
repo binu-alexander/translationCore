@@ -1,4 +1,6 @@
-import * as GogsApiHelpers from "./GogsApiHelpers";
+import NodeGit from 'nodegit';
+import * as GogsApiHelpers from './GogsApiHelpers';
+import simpleGit from 'simple-git';
 
 /**
  * @description An internal, core facing, API designed to be used as a bind to
@@ -7,10 +9,89 @@ import * as GogsApiHelpers from "./GogsApiHelpers";
  * @return {Object} An internal api
  * @TODO: Refactor using https://github.com/nodegit/nodegit
  **/
-const {exec} = require('child_process');
-import simpleGit from 'simple-git';
+const { exec } = require('child_process');
 
-export default function GitApi(directory) {
+/**
+ * Provides tools for manipulating a git repository.
+ */
+export class Repo {
+
+  /**
+   * @param {NodeGit.repository} repo - a repository opened by {@link NodeGit}
+   */
+  constructor (repo) {
+    this.repo = repo;
+  }
+
+  /**
+   * Opens an existing repository
+   * @param {string} directory - the file path to the repository
+   * @return {Promise<Repo>}
+   */
+  static open (directory) {
+    return NodeGit.Repository.open(directory).then((repo) => {
+      return new Repo(repo);
+    });
+  }
+
+  /**
+   * Initializes a new repository
+   * @param {string} directory - the file path to the repository
+   * @param {boolean} isBare - indicates if the repo should be bare
+   * @return {Promise<Repo>} an instance of the repo
+   */
+  static init (directory, isBare) {
+    return NodeGit.Repository.init(directory, isBare).then((repo) => {
+      return new Repo(repo);
+    });
+  }
+
+  /**
+   *
+   * @param {string} remoteName - the name of the remote
+   * @param {string} branch - the name of the branch to push
+   * @return {Promise<number>} - the error code if there is one
+   */
+  push (remoteName, branch) {
+    return NodeGit.Remote.lookup(this.repo, remoteName)
+      .then((remote) => {
+        console.warn(`pushing ${branch} to ${remoteName} with the new method`);
+        return remote.push(
+          [branch],
+          {
+            callbacks: {
+              credentials: (url, userName) => {
+                return NodeGit.Cred.sshKeyFromAgent(userName);
+              }
+            }
+          });
+      });
+  }
+
+  /**
+   * Adds a new remote endpoint to this repo.
+   * If the remote name already exists it will be overwritten.
+   * @param {string} url - the remote repository url
+   * @param {string} name - the local remote alias
+   * @return {Promise<NodeGit.Remote>} - an instance of the remote
+   */
+  addRemote (url, name) {
+    return this.removeRemote(name).then(() => {
+      return NodeGit.Remote.create(this.repo, name, url);
+    });
+  }
+
+  /**
+   * Removes a named remote from this repo.
+   * @param {string} name - the locale remote alias
+   * @return {Promise}
+   */
+  removeRemote (name) {
+    return NodeGit.Remote.delete(this.repo, name);
+  }
+}
+
+export default function GitApi (directory) {
   var git = simpleGit(directory);
 
   return {
@@ -37,6 +118,7 @@ export default function GitApi(directory) {
      * @param {function} callback - A callback to be run on complete.
      */
     push: function(remote, branch, callback) {
+      console.warn(`pushing ${branch} to ${remote} with the old method`);
       git.push(remote, branch, callback);
     },
     /**
@@ -140,7 +222,7 @@ export default function GitApi(directory) {
     },
     checkout: function(branch, callback) {
       if (!branch) {
-        callback("No branch");
+        callback('No branch');
         return;
       }
       git.checkout(branch, callback);
@@ -164,13 +246,13 @@ export default function GitApi(directory) {
  * splits the repo url to get repo name
  */
 export const parseRepoUrl = (ulr) => {
-  const repoName = ulr.trim().match(/^(\w*)(:\/\/|@)([^/:]+)[/:]([^/:]+)\/(.+).git$/) || [''];
-  const repoInfo = {
+  const repoName = ulr.trim()
+    .match(/^(\w*)(:\/\/|@)([^/:]+)[/:]([^/:]+)\/(.+).git$/) || [''];
+  return {
     name: repoName[5],
     user: repoName[4],
     url: repoName[0]
   };
-  return repoInfo;
 };
 
 /**
@@ -181,12 +263,13 @@ export const parseRepoUrl = (ulr) => {
  */
 export const getRepoNameInfo = (projectPath) => {
   return new Promise((resolve, reject) => {
-    exec(`git remote get-url origin`, {cwd: projectPath}, (err, stdout = '') => {
-      if (!err) {
-        const repoInfo = parseRepoUrl(stdout);
-        resolve(repoInfo);
-      } else reject(err);
-    });
+    exec(`git remote get-url origin`, { cwd: projectPath },
+      (err, stdout = '') => {
+        if (!err) {
+          const repoInfo = parseRepoUrl(stdout);
+          resolve(repoInfo);
+        } else reject(err);
+      });
   });
 };
 
@@ -197,13 +280,28 @@ export const getRepoNameInfo = (projectPath) => {
  * @param {string} repoName
  */
 export const pushNewRepo = (projectPath, user, repoName) => {
-  return new Promise((resolve) => {
-    const git = GitApi(projectPath);
-    const newRemote = GogsApiHelpers.getUserTokenDoor43Url(user, user.username + '/' + repoName);
-    git.push(newRemote, "master", (res) => {
-      resolve(res);
-    });
+  return Repo.open(projectPath).then((repo) => {
+    const remoteUrl = GogsApiHelpers.getUserTokenDoor43Url(user,
+      user.username + '/' + repoName);
+
+    return repo.addRemote(remoteUrl, 'origin')
+      .then((remote) => {
+        if(typeof remote === NodeGit.Remote) {
+          console.log('This is a nodegit remote');
+        } else {
+          console.log('This is not a nodegit remote');
+        }
+        return repo.push('origin', 'master');
+      });
   });
+
+  // return new Promise((resolve) => {
+  //   const git = GitApi(projectPath);
+  //   const newRemote = GogsApiHelpers.getUserTokenDoor43Url(user, user.username + '/' + repoName);
+  //   git.push(newRemote, "master", (res) => {
+  //     resolve(res);
+  //   });
+  // });
 };
 
 /**
@@ -215,7 +313,10 @@ export const pushNewRepo = (projectPath, user, repoName) => {
 export const renameRepoLocally = (user, newName, projectPath) => {
   return new Promise((resolve) => {
     const git = GitApi(projectPath);
-    git.remote(['set-url', 'origin', `https://git.door43.org/${user.username}/${newName}.git`], (res) => {
+    git.remote([
+      'set-url',
+      'origin',
+      `https://git.door43.org/${user.username}/${newName}.git`], (res) => {
       resolve(res);
     });
   });
@@ -268,7 +369,7 @@ export const saveRemote = (projectPath, remoteName, url) => {
   return new Promise((resolve, reject) => {
     const git = GitApi(projectPath);
     git.addRemote(remoteName, url, (err) => {
-      if(err) {
+      if (err) {
         reject(err);
       }
       resolve();
@@ -289,7 +390,7 @@ export const clearRemote = (projectPath, name) => {
       git.remote(['rm', name], (res) => { // delete the remote
         resolve(res);
       });
-    } catch(e) {
+    } catch (e) {
       console.log(e);
       reject(e);
     }
