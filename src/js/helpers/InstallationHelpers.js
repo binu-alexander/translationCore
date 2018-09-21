@@ -45,9 +45,10 @@ module.exports.downloadWinGit = downloadWinGit;
  */
 const isGitInstalled = () => {
   return new Promise((resolve) => {
-    exec('git', (err, data) => {
-      resolve(!!data);
-    });
+    resolve(true);
+    // exec('git', (err, data) => {
+    //   resolve(!!data);
+    // });
   });
 };
 module.exports.isGitInstalled = isGitInstalled;

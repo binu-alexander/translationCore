@@ -1,7 +1,7 @@
 import React from 'react';
 import path from 'path-extra';
 import open from 'open';
-import {Repo} from '../helpers/GitApi.js';
+import {Repo} from '../helpers/Repo.js';
 import { getTranslate } from '../selectors';
 // actions
 import * as AlertModalActions from './AlertModalActions';
