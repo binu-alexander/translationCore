@@ -50,19 +50,19 @@ export class Repo {
    *
    * @param {string} remoteName - the name of the remote
    * @param {string} branch - the name of the branch to push
+   * @param {object} user - the logged in user
    * @return {Promise<number>} - the error code if there is one
    */
   push (remoteName, branch, user) {
     return NodeGit.Remote.lookup(this.repo, remoteName)
       .then((remote) => {
-        console.warn(`pushing ${branch} to ${remoteName} with the new method`);
         return remote.push(
           [`refs/heads/${branch}:refs/heads/${branch}`],
           {
             callbacks: {
-              credentials: (url, userName) => {
-                console.log(user);
-                return NodeGit.Cred.userpassPlaintextNew(user.username, user.token);
+              credentials: () => {
+                return NodeGit.Cred.userpassPlaintextNew(user.username,
+                  user.token);
               }
             }
           }
@@ -78,7 +78,6 @@ export class Repo {
    * @return {Promise<NodeGit.Remote>} - an instance of the remote
    */
   addRemote (url, name) {
-    console.log(`adding remote ${name} as "${url}"`);
     return this.removeRemote(name).then(() => {
       return NodeGit.Remote.create(this.repo, name, url);
     });
@@ -91,6 +90,31 @@ export class Repo {
    */
   removeRemote (name) {
     return NodeGit.Remote.delete(this.repo, name);
+  }
+
+  /**
+   * Performs an add and commit on all files in the repo
+   * @param {object} user - the logged in user
+   * @param {string} message - the commit message
+   * @return {Promise<>}
+   */
+  async save (user, message) {
+    const index = await this.repo.refreshIndex();
+    await index.addAll("*");
+    await index.write();
+    const oid = await index.writeTree();
+    const head = await NodeGit.Reference.nameToId(this.repo, "HEAD");
+    const parent = await this.repo.getCommit(head);
+
+    let name = 'translationCore User';
+    let email = 'Unknown';
+    if(user) {
+      name = user.full_name || user.username || name;
+      email = user.email || email;
+    }
+    const author = NodeGit.Signature.now(name, email);
+
+    await this.repo.createCommit("HEAD", author, author, message, oid, [parent]);
   }
 }
 
