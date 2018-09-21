@@ -1,7 +1,7 @@
 import React from 'react';
 import path from 'path-extra';
 import open from 'open';
-import git, {Repo} from '../helpers/GitApi.js';
+import {Repo} from '../helpers/GitApi.js';
 import { getTranslate } from '../selectors';
 // actions
 import * as AlertModalActions from './AlertModalActions';
@@ -41,20 +41,14 @@ export function uploadProject(projectPath, user, onLine = navigator.onLine) {
             const remoteRepo = await GogsApiHelpers.createRepo(user, projectName);
             const remoteUrl = GogsApiHelpers.getUserTokenDoor43Url(user, remoteRepo.full_name);
 
-            console.warn('warming repo');
             const repo = await Repo.open(projectPath);
             await repo.addRemote(remoteUrl, "origin");
             await repo.save(user, "Commit before upload");
 
-            // git(projectPath).save(user, 'Commit before upload', projectPath, async (err) => {
-            // if (err) {
-            //   dispatch(AlertModalActions.openAlertDialog(translate('projects.uploading_error', {error: err})));
-            // } else {
             await GogsApiHelpers.updateGitRemotes(projectPath, user, null);
 
             const err = await repo.push("origin", "master", user);
 
-            // git(projectPath).push(remoteUrl, "master", err => {
             if (err) {
               if (err.status === 401 || err.code === "ENOTFOUND" || err.toString().includes("connect ETIMEDOUT") || err.toString().includes("INTERNET_DISCONNECTED") || err.toString().includes("unable to access") || err.toString().includes("The remote end hung up")) {
                 const message = translate('no_internet');
@@ -89,10 +83,6 @@ export function uploadProject(projectPath, user, onLine = navigator.onLine) {
                 )
               );
             }
-                // resolve();
-              // });
-            // }
-            // });
           } catch (err) {
             if (err) {
               const message = translate('projects.uploading_error', {error: err.message || err});

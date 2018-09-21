@@ -12,6 +12,15 @@ import simpleGit from 'simple-git';
 const { exec } = require('child_process');
 
 /**
+ * Generates credentials for communicating with the remote.
+ * @param {object} user - the logged in user
+ * @return {NodeGit.Cred} - A NodeGit Cred object.
+ */
+function generateCred (user) {
+  return NodeGit.Cred.userpassPlaintextNew(user.username, user.token);
+}
+
+/**
  * Provides tools for manipulating a git repository.
  */
 export class Repo {
@@ -28,10 +37,9 @@ export class Repo {
    * @param {string} directory - the file path to the repository
    * @return {Promise<Repo>}
    */
-  static open (directory) {
-    return NodeGit.Repository.open(directory).then((repo) => {
-      return new Repo(repo);
-    });
+  static async open (directory) {
+    const repo = await NodeGit.Repository.open(directory);
+    return new Repo(repo);
   }
 
   /**
@@ -40,10 +48,33 @@ export class Repo {
    * @param {boolean} isBare - indicates if the repo should be bare
    * @return {Promise<Repo>} an instance of the repo
    */
-  static init (directory, isBare) {
-    return NodeGit.Repository.init(directory, isBare).then((repo) => {
-      return new Repo(repo);
-    });
+  static async init (directory, isBare) {
+    const repo = await NodeGit.Repository.init(directory, isBare);
+    return new Repo(repo);
+  }
+
+  /**
+   * Clones a remote repository
+   * @param {string} url - the remote repository to be cloned
+   * @param {string} dest - the local destination of the repository
+   * @return {Promise<Repo>} - an instance of the repo
+   */
+  static async clone (url, dest) {
+    const config = {
+      fetchOpts: {
+        callbacks: {
+          certificateCheck: () => {
+            // github will fail cert check on some OSX machines
+            // this overrides that check
+            return 1;
+          }
+        }
+      }
+    };
+
+    const repo = await NodeGit.Clone(url, dest, config);
+    // TODO: clone recursively
+    return new Repo(repo);
   }
 
   /**
@@ -53,21 +84,18 @@ export class Repo {
    * @param {object} user - the logged in user
    * @return {Promise<number>} - the error code if there is one
    */
-  push (remoteName, branch, user) {
-    return NodeGit.Remote.lookup(this.repo, remoteName)
-      .then((remote) => {
-        return remote.push(
-          [`refs/heads/${branch}:refs/heads/${branch}`],
-          {
-            callbacks: {
-              credentials: () => {
-                return NodeGit.Cred.userpassPlaintextNew(user.username,
-                  user.token);
-              }
-            }
+  async push (remoteName, branch, user) {
+    const remote = await NodeGit.Remote.lookup(this.repo, remoteName);
+    return await remote.push(
+      [`refs/heads/${branch}:refs/heads/${branch}`],
+      {
+        callbacks: {
+          credentials: () => {
+            return generateCred(user);
           }
-        );
-      });
+        }
+      }
+    );
   }
 
   /**
@@ -77,10 +105,9 @@ export class Repo {
    * @param {string} name - the local remote alias
    * @return {Promise<NodeGit.Remote>} - an instance of the remote
    */
-  addRemote (url, name) {
-    return this.removeRemote(name).then(() => {
-      return NodeGit.Remote.create(this.repo, name, url);
-    });
+  async addRemote (url, name) {
+    await this.removeRemote(name);
+    await NodeGit.Remote.create(this.repo, name, url);
   }
 
   /**
@@ -100,24 +127,31 @@ export class Repo {
    */
   async save (user, message) {
     const index = await this.repo.refreshIndex();
-    await index.addAll("*");
+    await index.addAll('*');
     await index.write();
     const oid = await index.writeTree();
-    const head = await NodeGit.Reference.nameToId(this.repo, "HEAD");
+    const head = await NodeGit.Reference.nameToId(this.repo, 'HEAD');
     const parent = await this.repo.getCommit(head);
 
     let name = 'translationCore User';
     let email = 'Unknown';
-    if(user) {
+    if (user) {
       name = user.full_name || user.username || name;
       email = user.email || email;
     }
     const author = NodeGit.Signature.now(name, email);
 
-    await this.repo.createCommit("HEAD", author, author, message, oid, [parent]);
+    await this.repo.createCommit('HEAD', author, author, message, oid,
+      [parent]);
   }
 }
 
+/**
+ * @deprecated You should use {@link Repo} instead.
+ * @param directory
+ * @return {{init: init, pull: pull, push: push, commit: commit, status: status, mirror: mirror, add: add, update: update, save: save, revparse: (function(*=, *=): *), checkout: checkout, remote: (function(*=, *=): *), run: (function(*=, *=): Git), addRemote: addRemote, getRemotes: getRemotes}}
+ * @constructor
+ */
 export default function GitApi (directory) {
   var git = simpleGit(directory);
 
