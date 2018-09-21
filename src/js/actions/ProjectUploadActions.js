@@ -37,52 +37,70 @@ export function uploadProject(projectPath, user, onLine = navigator.onLine) {
             await dispatch(WordAlignmentActions.getUsfm3ExportFile(projectPath, filePath));
             const message = translate('projects.uploading_alert', {project_name: projectName, door43: translate('_.door43')});
             dispatch(AlertModalActions.openAlertDialog(message, true));
-            GogsApiHelpers.createRepo(user, projectName).then(repo => {
-              const newRemote = GogsApiHelpers.getUserTokenDoor43Url(user, repo.full_name);
-              git(projectPath).save(user, 'Commit before upload', projectPath, async (err) => {
+
+            const remoteRepo = await GogsApiHelpers.createRepo(user, projectName);
+            const remoteUrl = GogsApiHelpers.getUserTokenDoor43Url(user, remoteRepo.full_name);
+
+            // temp test
+            // console.warn('warming repo');
+            // const repo = await Repo.open(projectPath);
+            // const remote = await repo.addRemote(remoteUrl, "origin");
+            // console.warn(typeof remote);
+            // await repo.push("origin", "master", user);
+            // end temp test
+
+            console.warn('committing changes before upload');
+            git(projectPath).save(user, 'Commit before upload', projectPath, async (err) => {
+              if (err) {
+                dispatch(AlertModalActions.openAlertDialog(translate('projects.uploading_error', {error: err})));
+              } else {
+                await GogsApiHelpers.updateGitRemotes(projectPath, user, null);
+
+                console.warn('warming repo');
+                const repo = await Repo.open(projectPath); // test new git interface
+                const remoteObj = await repo.addRemote(remoteUrl, "origin");
+                console.warn(typeof remoteObj);
+
+                const err = await repo.push("origin", "master", user);
+
+                // git(projectPath).push(remoteUrl, "master", err => {
                 if (err) {
-                  dispatch(AlertModalActions.openAlertDialog(translate('projects.uploading_error', {error: err})));
+                  if (err.status === 401 || err.code === "ENOTFOUND" || err.toString().includes("connect ETIMEDOUT") || err.toString().includes("INTERNET_DISCONNECTED") || err.toString().includes("unable to access") || err.toString().includes("The remote end hung up")) {
+                    const message = translate('no_internet');
+                    dispatch(AlertModalActions.openAlertDialog(message));
+                  } else if (err.toString().includes("rejected because the remote contains work")) {
+                    const message = translate('projects.upload_modified_error', {project_name: projectName, door43: translate('_.door43')});
+                    dispatch(AlertModalActions.openAlertDialog(message));
+                  } else if (err.hasOwnProperty('message')) {
+                    dispatch(AlertModalActions.openAlertDialog(translate('projects.uploading_error', {error: err.message})));
+                  } else if (err.hasOwnProperty('data') && err.data) {
+                    dispatch(AlertModalActions.openAlertDialog(translate('projects.uploading_error', {error: err.data})));
+                  } else {
+                    dispatch(AlertModalActions.openAlertDialog(translate('projects.uploading_unknown_error')));
+                  }
                 } else {
-                  await GogsApiHelpers.updateGitRemotes(projectPath, user, null);
-                  git(projectPath).push(newRemote, "master", err => {
-                    if (err) {
-                      if (err.status === 401 || err.code === "ENOTFOUND" || err.toString().includes("connect ETIMEDOUT") || err.toString().includes("INTERNET_DISCONNECTED") || err.toString().includes("unable to access") || err.toString().includes("The remote end hung up")) {
-                        const message = translate('no_internet');
-                        dispatch(AlertModalActions.openAlertDialog(message));
-                      } else if (err.toString().includes("rejected because the remote contains work")) {
-                        const message = translate('projects.upload_modified_error', {project_name: projectName, door43: translate('_.door43')});
-                        dispatch(AlertModalActions.openAlertDialog(message));
-                      } else if (err.hasOwnProperty('message')) {
-                        dispatch(AlertModalActions.openAlertDialog(translate('projects.uploading_error', {error: err.message})));
-                      } else if (err.hasOwnProperty('data') && err.data) {
-                        dispatch(AlertModalActions.openAlertDialog(translate('projects.uploading_error', {error: err.data})));
-                      } else {
-                        dispatch(AlertModalActions.openAlertDialog(translate('projects.uploading_unknown_error')));
-                      }
-                    } else {
-                      const userDcsUrl = GogsApiHelpers.getUserDoor43Url(user, projectName);
-                      dispatch(
-                        AlertModalActions.openAlertDialog(
-                          <div>
-                            <span>
-                              <span style={{ fontWeight: 'bold' }}>{user.username + ", "}</span>
-                              {translate('projects.upload_successful_alert', {username: user.username})}&nbsp;
-                          <a style={{ cursor: 'pointer' }} onClick={() => {
-                                dispatch(OnlineModeConfirmActions.confirmOnlineAction(() => {
-                                  open(userDcsUrl);
-                                }));
-                              }}>
-                                {userDcsUrl}
-                              </a>
-                            </span>
-                          </div>
-                        )
-                      );
-                    }
-                    resolve();
-                  });
+                  const userDcsUrl = GogsApiHelpers.getUserDoor43Url(user, projectName);
+                  dispatch(
+                    AlertModalActions.openAlertDialog(
+                      <div>
+                        <span>
+                          <span style={{ fontWeight: 'bold' }}>{user.username + ", "}</span>
+                          {translate('projects.upload_successful_alert', {username: user.username})}&nbsp;
+                      <a style={{ cursor: 'pointer' }} onClick={() => {
+                            dispatch(OnlineModeConfirmActions.confirmOnlineAction(() => {
+                              open(userDcsUrl);
+                            }));
+                          }}>
+                            {userDcsUrl}
+                          </a>
+                        </span>
+                      </div>
+                    )
+                  );
                 }
-              });
+                  // resolve();
+                // });
+              }
             });
           } catch (err) {
             if (err) dispatch(AlertModalActions.openAlertDialog(err.message || err, false));

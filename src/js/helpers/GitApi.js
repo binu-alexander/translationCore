@@ -52,19 +52,21 @@ export class Repo {
    * @param {string} branch - the name of the branch to push
    * @return {Promise<number>} - the error code if there is one
    */
-  push (remoteName, branch) {
+  push (remoteName, branch, user) {
     return NodeGit.Remote.lookup(this.repo, remoteName)
       .then((remote) => {
         console.warn(`pushing ${branch} to ${remoteName} with the new method`);
         return remote.push(
-          [branch],
+          [`refs/heads/${branch}:refs/heads/${branch}`],
           {
             callbacks: {
               credentials: (url, userName) => {
-                return NodeGit.Cred.sshKeyFromAgent(userName);
+                console.log(user);
+                return NodeGit.Cred.userpassPlaintextNew(user.username, user.token);
               }
             }
-          });
+          }
+        );
       });
   }
 
@@ -76,6 +78,7 @@ export class Repo {
    * @return {Promise<NodeGit.Remote>} - an instance of the remote
    */
   addRemote (url, name) {
+    console.log(`adding remote ${name} as "${url}"`);
     return this.removeRemote(name).then(() => {
       return NodeGit.Remote.create(this.repo, name, url);
     });
@@ -286,7 +289,7 @@ export const pushNewRepo = (projectPath, user, repoName) => {
 
     return repo.addRemote(remoteUrl, 'origin')
       .then((remote) => {
-        if(typeof remote === NodeGit.Remote) {
+        if (typeof remote === NodeGit.Remote) {
           console.log('This is a nodegit remote');
         } else {
           console.log('This is not a nodegit remote');
