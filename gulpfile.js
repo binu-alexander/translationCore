@@ -9,6 +9,7 @@ const path = require('path');
 const rimraf = require('rimraf');
 const CrowdinApi = require('./scripts/CrowdinApi');
 const ncp = require('ncp').ncp;
+const rebuild = require('electron-rebuild');
 
 function copy(src, dest) {
   return new Promise((resolve, reject) => {
@@ -167,7 +168,12 @@ gulp.task('build_binaries', done => {
     },
     'out': BUILD_DIR,
     'app-version': p.version,
-    'icon': './src/images/icon'
+    'icon': './src/images/icon',
+    afterCopy: [(buildPath, electronVersion, platform, arch, callback) => {
+      rebuild({buildPath, electronVersion, arch})
+        .then(() => callback())
+        .catch((error) => callback(error));
+    }]
   }, (err) => {
     if(err) {
       throw new Error(err);
