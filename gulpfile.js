@@ -7,15 +7,44 @@ const packager = require('electron-packager');
 const change = require('gulp-change');
 const path = require('path');
 const rimraf = require('rimraf');
+const del = require('del');
 const CrowdinApi = require('./scripts/CrowdinApi');
 const ncp = require('ncp').ncp;
-const rebuild = require('electron-rebuild');
+const exec = require('child_process').execSync;
+const pexec = require('promised-exec');
+const pkg = require('./package.json');
+const devDeps = Object.keys(pkg.devDependencies);
 
-function copy(src, dest) {
+const BUILD_DIR = './out/';
+const RELEASE_DIR = './release/';
+const iconPath = 'src/images/icon'; // without extension
+const DEFAULT_OPTS = {
+  dir: '.',
+  // name: pkg.productName,
+  // https://github.com/atom/electron/blob/master/docs/tutorial/application-packaging.md
+  asar: true,
+  quiet: true,
+  ignore: [
+    '.github',
+    'coverage',
+    '.idea',
+    '__tests__',
+    '__mocks__',
+    'vendor',
+    BUILD_DIR,
+    RELEASE_DIR,
+    'scripts',
+    '\\.(?!env)' // TRICKY: exclude hidden files except for .env files
+  ].concat(devDeps.map(name => `/node_modules/${name}($|/)`)),
+  version: getElectronVersion(),
+  'app-version': pkg.version
+};
+
+function copy (src, dest) {
   return new Promise((resolve, reject) => {
     console.log(`copying ${src} to ${dest}`);
     ncp(src, dest, (err) => {
-      if(err) {
+      if (err) {
         console.log(`failed copying ${src}`);
         reject(err);
       } else {
@@ -25,9 +54,6 @@ function copy(src, dest) {
     });
   });
 }
-
-const BUILD_DIR = './out/';
-const RELEASE_DIR = './release/';
 
 const getBranchType = () => {
   if (process.env.TRAVIS && process.env.TRAVIS_BRANCH) {
@@ -42,21 +68,27 @@ const getBranchType = () => {
   return 'unknown';
 };
 
+function installNodeGit (target) {
+  console.log(`Installing nodegit for ${target.platform}-${target.arch}`);
+  return pexec(
+    `npm i nodegit --target_arch=${target.arch} --target_platform=${target.platform}`);
+}
+
 gulp.task('crowdin', () => {
   if (process.env.CROWDIN_API_KEY && process.env.CROWDIN_PROJECT) {
-    const api = new CrowdinApi({apiKey: process.env.CROWDIN_API_KEY});
+    const api = new CrowdinApi({ apiKey: process.env.CROWDIN_API_KEY });
     const files = {
       'English-en_US.json': './src/locale/English-en_US.json'
     };
     return api.updateFile(process.env.CROWDIN_PROJECT, files)
-      .then(function (result) {
+      .then(function(result) {
         if (result.success) {
           console.log('Crowdin upload succeeded', result.files);
         } else {
           console.log(result);
         }
       })
-      .catch(function (err) {
+      .catch(function(err) {
         console.log('Crowdin error', err);
       });
   } else {
@@ -124,63 +156,85 @@ gulp.task('clean', done => {
   done();
 });
 
-gulp.task('build_binaries', done => {
-  let platforms = [];
+function build (target) {
+  return clean(target)
+    .then(() => installNodeGit(target))
+    .then(() => packageApp(target));
+}
 
-  if (argv.win) platforms.push('win32');
-  if (argv.osx) platforms.push('darwin'); // legacy
-  if (argv.macos) platforms.push('darwin');
-  if (argv.linux) platforms.push('linux');
-  if (!platforms.length) platforms.push('win32', 'darwin', 'linux');
+gulp.task('build_binaries', () => {
+  // let platforms = [];
 
-  let p = require('./package');
+  // if (argv.win) platforms.push('win32');
+  // if (argv.osx) platforms.push('darwin'); // legacy
+  // if (argv.macos) platforms.push('darwin');
+  // if (argv.linux) platforms.push('linux');
+  // if (!platforms.length) platforms.push('win32', 'darwin', 'linux');
 
-  let ignored = Object.keys(p['devDependencies']).concat([
-    '.github',
-    'coverage',
-    '.idea',
-    '__tests__',
-    '__mocks__',
-    'vendor',
-    BUILD_DIR,
-    RELEASE_DIR,
-    'scripts',
-    '\\.(?!env)' // TRICKY: exclude hidden files except for .env files
-  ]).map(name => {
-    return new RegExp('(^/' + name + '|' + '^/node_modules/' + name + ')');
-  });
+  if(!argv.platform) {
+    throw new Error('You must specify a platform. --platform (win32|darwin|linux)');
+  }
+  if(!argv.arch) {
+    throw new Error('You must specify an architecture. --arch (x64|ia32)');
+  }
 
-  packager({
-    'asar': true,
-    'quiet': true,
-    'arch': argv.win ? 'all' : 'x64',
-    'platform': platforms,
-    'dir': '.',
-    'ignore': function (name) {
-      for (let i = 0, len = ignored.length; i < len; ++i) {
-        if (ignored[i].test(name)) {
-          console.log('\t(Ignoring)\t', name);
-          return true;
-        }
-      }
+  const target = {
+    platform: argv.platform,
+    arch: argv.arch
+  };
 
-      return false;
-    },
-    'out': BUILD_DIR,
-    'app-version': p.version,
-    'icon': './src/images/icon',
-    afterCopy: [(buildPath, electronVersion, platform, arch, callback) => {
-      rebuild({buildPath, electronVersion, arch})
-        .then(() => callback())
-        .catch((error) => callback(error));
-    }]
-  }, (err) => {
-    if(err) {
-      throw new Error(err);
-    }
-    console.log('Done building...');
-    done();
-  });
+  return build(target)
+    .then(() => {
+      console.log('All done');
+    })
+    .catch(err => {
+      console.error('Error during the build:');
+      console.error(err);
+    });
+  //
+  // let p = require('./package');
+  //
+  // let ignored = Object.keys(p['devDependencies']).concat([
+  //   '.github',
+  //   'coverage',
+  //   '.idea',
+  //   '__tests__',
+  //   '__mocks__',
+  //   'vendor',
+  //   BUILD_DIR,
+  //   RELEASE_DIR,
+  //   'scripts',
+  //   '\\.(?!env)' // TRICKY: exclude hidden files except for .env files
+  // ]).map(name => {
+  //   return new RegExp('(^/' + name + '|' + '^/node_modules/' + name + ')');
+  // });
+
+  // packager({
+  //   'asar': true,
+  //   'quiet': true,
+  //   'arch': argv.win ? 'all' : 'x64',
+  //   'platform': platforms,
+  //   'dir': '.',
+  //   'ignore': function(name) {
+  //     for (let i = 0, len = ignored.length; i < len; ++i) {
+  //       if (ignored[i].test(name)) {
+  //         console.log('\t(Ignoring)\t', name);
+  //         return true;
+  //       }
+  //     }
+  //
+  //     return false;
+  //   },
+  //   'out': BUILD_DIR,
+  //   'app-version': p.version,
+  //   'icon': './src/images/icon'
+  // }, (err) => {
+  //   if (err) {
+  //     throw new Error(err);
+  //   }
+  //   console.log('Done building...');
+  //   done();
+  // });
 });
 
 /**
@@ -294,7 +348,7 @@ gulp.task('release-macos', () => {
     mkdirp.sync(path.dirname(dest));
     let cmd = `scripts/osx/makedmg.sh "${p.name}" ${buildPath} ${dest}`;
     console.log(cmd);
-    exec(cmd, function (err) {
+    exec(cmd, function(err) {
       if (err) {
         reject(err);
       } else {
@@ -375,7 +429,6 @@ const releaseWindows = (arch, src, dest) => {
       'Inno Setup is not installed. Please install Inno Setup and try again.');
   }
 
-
   const destDir = path.dirname(dest);
   mkdirp.sync(destDir);
   // TRICKY: the iss script cannot take the .exe extension on the file name
@@ -385,10 +438,10 @@ const releaseWindows = (arch, src, dest) => {
     : 'x86'} /DRootPath=../ /DVersion=${p.version} /DGitVersion=${gitVersion} /DDestFile=${file} /DDestDir=${destDir} /DBuildDir=${BUILD_DIR} /q`;
 
   return downloadWinGit(gitVersion, arch).then(() => {
-    return new Promise(function (resolve, reject) {
+    return new Promise(function(resolve, reject) {
       console.log(`Generating ${arch} bit windows installer`);
       console.log(`executing: \n${cmd}\n`);
-      exec(cmd, function (err) {
+      exec(cmd, function(err) {
         if (err) {
           reject(err);
         } else {
@@ -405,7 +458,7 @@ const releaseWindows = (arch, src, dest) => {
  * @param arch
  * @return {*}
  */
-const downloadWinGit = function (version, arch) {
+const downloadWinGit = function(version, arch) {
   let url = `https://github.com/git-for-windows/git/releases/download/v${version}.windows.1/Git-${version}-${arch}-bit.exe`;
   let dir = './vendor';
   let dest = dir + `/Git-${version}-${arch}-bit.exe`;
@@ -444,7 +497,7 @@ gulp.task('release', done => {
    * @param arch 64|32
    * @returns {Promise}
    */
-  const downloadGit = function (version, arch) {
+  const downloadGit = function(version, arch) {
     let url = `https://github.com/git-for-windows/git/releases/download/v${version}.windows.1/Git-${version}-${arch}-bit.exe`;
     let dir = './vendor';
     let dest = dir + `/Git-${version}-${arch}-bit.exe`;
@@ -466,7 +519,7 @@ gulp.task('release', done => {
    * @param os
    * @returns {Promise}
    */
-  const releaseWin = function (arch, os) {
+  const releaseWin = function(arch, os) {
     let isccPath;
     if (isLinux) {
       isccPath = './scripts/innosetup/iscc';
@@ -491,10 +544,10 @@ gulp.task('release', done => {
     let cmd = `${isccPath} scripts/win_installer.iss /DArch=${arch === '64'
       ? 'x64'
       : 'x86'} /DRootPath=../ /DVersion=${p.version} /DGitVersion=${gitVersion} /DDestFile=${file} /DDestDir=${destDir} /DBuildDir=${BUILD_DIR} /q`;
-    return new Promise(function (resolve, reject) {
+    return new Promise(function(resolve, reject) {
       console.log(`Generating ${arch} bit windows installer`);
       console.log(`executing: \n${cmd}\n`);
-      exec(cmd, function (err, stdout, stderr) {
+      exec(cmd, function(err, stdout, stderr) {
         if (err) {
           console.error(err);
           resolve({
@@ -514,7 +567,7 @@ gulp.task('release', done => {
     });
   };
 
-  mkdirp('release', function () {
+  mkdirp('release', function() {
     for (let os of platforms) {
       switch (os) {
         case 'win32':
@@ -544,14 +597,14 @@ gulp.task('release', done => {
         case 'darwin':
           if ((isLinux || isMacOS) &&
             fs.existsSync(BUILD_DIR + p.name + '-darwin-x64/')) {
-            promises.push(new Promise(function (os, resolve, reject) {
+            promises.push(new Promise(function(os, resolve, reject) {
               let src = `out/${p.name}-darwin-x64`;
               let name = `translationCore-macos-x64-${p.version}.dmg`;
               let dest = `${RELEASE_DIR}macos-x64/${name}`;
               mkdirp(path.dirname(dest));
               let cmd = `scripts/osx/makedmg.sh "${p.name}" ${src} ${dest}`;
               console.log(cmd);
-              exec(cmd, function (err, stdout, stderr) {
+              exec(cmd, function(err, stdout, stderr) {
                 if (err) {
                   console.log(err);
                   resolve({
@@ -581,13 +634,13 @@ gulp.task('release', done => {
           break;
         case 'linux':
           if (isLinux && fs.existsSync(BUILD_DIR + p.name + '-linux-x64/')) {
-            promises.push(new Promise(function (os, resolve, reject) {
+            promises.push(new Promise(function(os, resolve, reject) {
               let name = `translationCore-linux-x64-${p.version}.zip`;
               let dest = `${RELEASE_DIR}linux-x64/${name}`;
               mkdirp.sync(path.dirname(dest));
               try {
                 let output = fs.createWriteStream(dest);
-                output.on('close', function () {
+                output.on('close', function() {
                   resolve({
                     os: os,
                     status: 'ok',
@@ -623,11 +676,11 @@ gulp.task('release', done => {
           console.warn('No release procedure has been defined for ' + os);
       }
     }
-    return Promise.all(promises).then(function (values) {
+    return Promise.all(promises).then(function(values) {
       mkdirp(RELEASE_DIR + 'overview');
       var releaseNotes = fs.createWriteStream(RELEASE_DIR +
         'overview/index.html');
-      releaseNotes.on('error', function (e) {
+      releaseNotes.on('error', function(e) {
         console.error(e);
       });
       releaseNotes.write('<link rel="stylesheet" href="build.css">');
@@ -669,3 +722,47 @@ gulp.task('release', done => {
 
 gulp.task('build', gulp.series('set_mode', 'build_binaries'));
 
+// utils
+
+function clean(target) {
+  console.log(`Removing ${BUILD_DIR}/${target.platform}-${target.arch}`);
+  return del(`${BUILD_DIR}/${target.platform}-${target.arch}`);
+}
+
+function packageApp (target) {
+  console.log(`building: ${target.platform}-${target.arch}`);
+  const opts = Object.assign({}, DEFAULT_OPTS, target, {
+    icon: './src/images/icon',//getIcon(target.platform),
+    // prune: true,
+    out: `${BUILD_DIR}/${target.platform}-${target.arch}`
+  });
+  return doPackage(opts);
+}
+
+function doPackage (opts) {
+  return new Promise((resolve, reject) => {
+    packager(opts, function(err, appPath) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(appPath);
+      }
+    });
+  });
+}
+
+function getElectronVersion () {
+  try {
+    const out = exec('npm list electron-prebuilt').toString();
+    return out.split('electron-prebuilt@')[1].replace(/\s/g, '');
+  } catch (err) {
+    return '2.0.10';
+  }
+}
+
+function getIcon (platform) {
+  const iconExt = platform === 'darwin' ? '.icns' : platform === 'win32'
+    ? '.ico'
+    : '.png';
+  return iconPath + iconExt;
+}
