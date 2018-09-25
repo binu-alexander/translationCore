@@ -1,11 +1,58 @@
 {
-  "application/javascript": {
-    "presets": [
-      "env",
-      "react"
-    ],
-    "plugins": [
-      "transform-object-rest-spread"
-    ]
+  "env": {
+    "development": {
+      "application/javascript": {
+        "presets": [
+          [
+            "env",
+            {
+              "targets": {
+                "node": "current"
+              }
+            }
+          ],
+          "react"
+        ],
+        "plugins": [
+          [
+            "transform-runtime", {
+              "polyfill": false,
+              "regenerator": true
+            }
+          ],
+          "transform-object-rest-spread",
+          "transform-decorators-legacy",
+          "transform-async-to-generator"
+        ],
+        "sourceMaps": "inline"
+      }
+    },
+    "production": {
+      "application/javascript": {
+        "presets": [
+          [
+            "env",
+            {
+              "targets": {
+                "node": "current"
+              }
+            }
+          ],
+          "react"
+        ],
+        "plugins": [
+          [
+            "transform-runtime", {
+              "polyfill": false,
+              "regenerator": true
+            }
+          ],
+          "transform-object-rest-spread",
+          "transform-decorators-legacy",
+          "transform-async-to-generator"
+        ],
+        "sourceMaps": false
+      }
+    }
   }
 }

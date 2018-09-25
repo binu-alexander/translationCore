@@ -1,19 +1,8 @@
+require("babel-polyfill");
+
 const path  = require('path');
 require('dotenv').config({path: path.join(__dirname, '../../../.env')});
 (function () {
-  try {
-    require("babel-register")({
-      extensions: [".js", ".jsx"],
-      presets: ["es2015", "react"],
-      plugins: [
-        "transform-object-rest-spread",
-        "transform-decorators-legacy"
-      ]
-    });
-  } catch (error) {
-    console.log('Bypass babel in production');
-  }
-  require("babel-polyfill"); // needed for es6 usage.
   const ReactDOM = require('react-dom');
   const remote = require('electron').remote;
   const {Menu} = remote;

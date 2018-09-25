@@ -1,4 +1,4 @@
-const electron = require('electron');
+import electron from 'electron';
 const isGitInstalled = require('./js/helpers/InstallationHelpers').isGitInstalled;
 const showElectronGitSetup = require('./js/helpers/InstallationHelpers').showElectronGitSetup;
 const p = require('../package.json');
