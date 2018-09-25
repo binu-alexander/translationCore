@@ -140,19 +140,20 @@ gulp.task('build', () => {
       });
 
       // TRICKY: default ignores are not working yet.
-      let ignored = Object.keys(pkg['devDependencies']).concat([
+      let ignored = [
         '.github',
         'coverage',
         '.idea',
         '__tests__',
         '__mocks__',
         'vendor',
+        'node_modules/.bin',
         BUILD_DIR,
         RELEASE_DIR,
         'scripts',
-        '\\.(?!env|npmrc|babelrc)' // TRICKY: exclude hidden files except for .env files
-      ]).map(name => {
-        return new RegExp('(^/' + name + '|' + '^/node_modules/' + name + ')');
+        '\\.(?!env|npmrc|babelrc|compilerc)' // TRICKY: exclude hidden files except for .env files
+      ].map(name => {
+        return new RegExp(`(^/${name}|^/node_modules/${name}/)`);
       });
 
     return packager(Object.assign({}, opts, {

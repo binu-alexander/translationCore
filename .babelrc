@@ -12,17 +12,23 @@
   ],
   "plugins": [
     [
-      "transform-runtime", {
+      "transform-runtime",
+      {
         "polyfill": false,
         "regenerator": true
-      },
+      }
+    ],
+    "transform-decorators-legacy",
+    "transform-async-to-generator",
+    [
       "transform-object-rest-spread",
-      "transform-decorators-legacy",
-      "transform-async-to-generator",
-      "jest-hoist",
       {
         "useBuiltIns": true
       }
-    ]
+    ],
+    "jest-hoist"
+  ],
+  "ignore": [
+    "node_modules"
   ]
 }
