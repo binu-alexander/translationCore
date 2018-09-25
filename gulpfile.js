@@ -4,7 +4,7 @@ const argv = require('yargs').argv;
 const fs = require('fs-extra');
 const request = require('./scripts/request');
 const packager = require('electron-packager');
-const change = require('gulp-change');
+// const change = require('gulp-change');
 const path = require('path');
 const rimraf = require('rimraf');
 const del = require('del');
@@ -20,8 +20,7 @@ const RELEASE_DIR = './release/';
 const iconPath = 'src/images/icon'; // without extension
 const DEFAULT_OPTS = {
   dir: '.',
-  // name: pkg.productName,
-  // https://github.com/atom/electron/blob/master/docs/tutorial/application-packaging.md
+  name: pkg.productName,
   asar: true,
   quiet: true,
   ignore: [
@@ -34,7 +33,7 @@ const DEFAULT_OPTS = {
     BUILD_DIR,
     RELEASE_DIR,
     'scripts',
-    '\\.(?!env)' // TRICKY: exclude hidden files except for .env files
+    '\\.(?!env|npmrc)' // TRICKY: exclude hidden files except for .env files
   ].concat(devDeps.map(name => `/node_modules/${name}($|/)`)),
   version: getElectronVersion(),
   'app-version': pkg.version
@@ -102,52 +101,52 @@ gulp.task('crowdin', () => {
  * however, these changes should not be committed to git.
  * As a safety net this will only run on travis.
  */
-gulp.task('set_mode', () => {
-  let p = require('./package');
-  if (!process.env.TRAVIS) {
-    console.log('Skipping build mode. On non-travis environment');
-    return Promise.resolve();
-  }
-
-  if (process.env.TRAVIS_TAG) {
-    console.log('Tag mode');
-    if (!process.env.TRAVIS_TAG.startsWith('v')) {
-      return Promise.reject(`The tag must be prefixed with a "v".`);
-    }
-    if (process.env.TRAVIS_TAG !== `v${p.version}`) {
-      return Promise.reject(
-        `The package version does not match the tag name. Expected ${process.env.TRAVIS_TAG} but found ${p.version}`);
-    }
-  } else if (process.env.TRAVIS_BRANCH &&
-    process.env.TRAVIS_BRANCH.startsWith('release-')) {
-    console.log('Release mode');
-    let branchVersion = process.env.TRAVIS_BRANCH.replace(/^release-/, '');
-    if (!branchVersion.startsWith('v')) {
-      return Promise.reject(
-        `The release branch version must be prefixed with a "v".`);
-    }
-    if (branchVersion !== `v${p.version}`) {
-      return Promise.reject(
-        `The package version does not match the release branch version. Expected ${branchVersion} but found ${p.version}`);
-    }
-    return Promise.resolve();
-  } else {
-    console.log('Develop mode');
-    p.developer_mode = true;
-    if (process.env.TRAVIS_COMMIT) {
-      p.version = p.version + '-' + process.env.TRAVIS_COMMIT.substring(0, 7);
-    } else {
-      p.version = p.version + '-dev';
-    }
-
-    // write modifications to package
-    return gulp.src(['package.json'])
-      .pipe(change(() => {
-        return JSON.stringify(p);
-      }))
-      .pipe(gulp.dest('./'));
-  }
-});
+// gulp.task('set_mode', () => {
+//   let p = require('./package');
+//   if (!process.env.TRAVIS) {
+//     console.log('Skipping build mode. On non-travis environment');
+//     return Promise.resolve();
+//   }
+//
+//   if (process.env.TRAVIS_TAG) {
+//     console.log('Tag mode');
+//     if (!process.env.TRAVIS_TAG.startsWith('v')) {
+//       return Promise.reject(`The tag must be prefixed with a "v".`);
+//     }
+//     if (process.env.TRAVIS_TAG !== `v${p.version}`) {
+//       return Promise.reject(
+//         `The package version does not match the tag name. Expected ${process.env.TRAVIS_TAG} but found ${p.version}`);
+//     }
+//   } else if (process.env.TRAVIS_BRANCH &&
+//     process.env.TRAVIS_BRANCH.startsWith('release-')) {
+//     console.log('Release mode');
+//     let branchVersion = process.env.TRAVIS_BRANCH.replace(/^release-/, '');
+//     if (!branchVersion.startsWith('v')) {
+//       return Promise.reject(
+//         `The release branch version must be prefixed with a "v".`);
+//     }
+//     if (branchVersion !== `v${p.version}`) {
+//       return Promise.reject(
+//         `The package version does not match the release branch version. Expected ${branchVersion} but found ${p.version}`);
+//     }
+//     return Promise.resolve();
+//   } else {
+//     console.log('Develop mode');
+//     p.developer_mode = true;
+//     if (process.env.TRAVIS_COMMIT) {
+//       p.version = p.version + '-' + process.env.TRAVIS_COMMIT.substring(0, 7);
+//     } else {
+//       p.version = p.version + '-dev';
+//     }
+//
+//     // write modifications to package
+//     return gulp.src(['package.json'])
+//       .pipe(change(() => {
+//         return JSON.stringify(p);
+//       }))
+//       .pipe(gulp.dest('./'));
+//   }
+// });
 
 gulp.task('clean', done => {
   rimraf.sync(BUILD_DIR);
@@ -162,7 +161,7 @@ function build (target) {
     .then(() => packageApp(target));
 }
 
-gulp.task('build_binaries', () => {
+gulp.task('build', () => {
   // let platforms = [];
 
   // if (argv.win) platforms.push('win32');
@@ -171,10 +170,11 @@ gulp.task('build_binaries', () => {
   // if (argv.linux) platforms.push('linux');
   // if (!platforms.length) platforms.push('win32', 'darwin', 'linux');
 
-  if(!argv.platform) {
-    throw new Error('You must specify a platform. --platform (win32|darwin|linux)');
+  if (!argv.platform) {
+    throw new Error(
+      'You must specify a platform. --platform (win32|darwin|linux)');
   }
-  if(!argv.arch) {
+  if (!argv.arch) {
     throw new Error('You must specify an architecture. --arch (x64|ia32)');
   }
 
@@ -183,58 +183,59 @@ gulp.task('build_binaries', () => {
     arch: argv.arch
   };
 
-  return build(target)
-    .then(() => {
-      console.log('All done');
-    })
-    .catch(err => {
-      console.error('Error during the build:');
-      console.error(err);
-    });
-  //
-  // let p = require('./package');
-  //
-  // let ignored = Object.keys(p['devDependencies']).concat([
-  //   '.github',
-  //   'coverage',
-  //   '.idea',
-  //   '__tests__',
-  //   '__mocks__',
-  //   'vendor',
-  //   BUILD_DIR,
-  //   RELEASE_DIR,
-  //   'scripts',
-  //   '\\.(?!env)' // TRICKY: exclude hidden files except for .env files
-  // ]).map(name => {
-  //   return new RegExp('(^/' + name + '|' + '^/node_modules/' + name + ')');
-  // });
+  // return build(target)
+  //   .then(() => {
+  //     console.log('All done');
+  //   })
+  //   .catch(err => {
+  //     console.error('Error during the build:');
+  //     console.error(err);
+  //   });
 
-  // packager({
-  //   'asar': true,
-  //   'quiet': true,
-  //   'arch': argv.win ? 'all' : 'x64',
-  //   'platform': platforms,
-  //   'dir': '.',
-  //   'ignore': function(name) {
-  //     for (let i = 0, len = ignored.length; i < len; ++i) {
-  //       if (ignored[i].test(name)) {
-  //         console.log('\t(Ignoring)\t', name);
-  //         return true;
-  //       }
-  //     }
-  //
-  //     return false;
-  //   },
-  //   'out': BUILD_DIR,
-  //   'app-version': p.version,
-  //   'icon': './src/images/icon'
-  // }, (err) => {
-  //   if (err) {
-  //     throw new Error(err);
-  //   }
-  //   console.log('Done building...');
-  //   done();
-  // });
+  return clean(target)
+    // .then(() => installNodeGit(target))
+    .then(() => {
+      const opts = Object.assign({}, DEFAULT_OPTS, target, {
+        icon: getIcon(target.platform),
+        prune: true,
+        out: path.join(BUILD_DIR, `${target.platform}-${target.arch}`)
+      });
+      let ignored = Object.keys(pkg['devDependencies']).concat([
+        '.github',
+        'coverage',
+        '.idea',
+        '__tests__',
+        '__mocks__',
+        'vendor',
+        BUILD_DIR,
+        RELEASE_DIR,
+        'scripts',
+        '\\.(?!env|npmrc|babelrc)' // TRICKY: exclude hidden files except for .env files
+      ]).map(name => {
+        return new RegExp('(^/' + name + '|' + '^/node_modules/' + name + ')');
+      });
+
+    return packager({
+      'asar': true,
+      'quiet': false,
+      'arch': 'x64',
+      'platform': 'linux',
+      'dir': '.',
+      'ignore': function(name) {
+        for (let i = 0, len = ignored.length; i < len; ++i) {
+          if (ignored[i].test(name)) {
+            console.log('\t(Ignoring)\t', name);
+            return true;
+          }
+        }
+
+        return false;
+      },
+      'out': opts.out,
+      'app-version': pkg.version,
+      'icon': './src/images/icon'
+    });
+  });
 });
 
 /**
@@ -544,10 +545,10 @@ gulp.task('release', done => {
     let cmd = `${isccPath} scripts/win_installer.iss /DArch=${arch === '64'
       ? 'x64'
       : 'x86'} /DRootPath=../ /DVersion=${p.version} /DGitVersion=${gitVersion} /DDestFile=${file} /DDestDir=${destDir} /DBuildDir=${BUILD_DIR} /q`;
-    return new Promise(function(resolve, reject) {
+    return new Promise(function(resolve) {
       console.log(`Generating ${arch} bit windows installer`);
       console.log(`executing: \n${cmd}\n`);
-      exec(cmd, function(err, stdout, stderr) {
+      exec(cmd, function(err) {
         if (err) {
           console.error(err);
           resolve({
@@ -597,14 +598,14 @@ gulp.task('release', done => {
         case 'darwin':
           if ((isLinux || isMacOS) &&
             fs.existsSync(BUILD_DIR + p.name + '-darwin-x64/')) {
-            promises.push(new Promise(function(os, resolve, reject) {
+            promises.push(new Promise(function(os, resolve) {
               let src = `out/${p.name}-darwin-x64`;
               let name = `translationCore-macos-x64-${p.version}.dmg`;
               let dest = `${RELEASE_DIR}macos-x64/${name}`;
               mkdirp(path.dirname(dest));
               let cmd = `scripts/osx/makedmg.sh "${p.name}" ${src} ${dest}`;
               console.log(cmd);
-              exec(cmd, function(err, stdout, stderr) {
+              exec(cmd, function(err) {
                 if (err) {
                   console.log(err);
                   resolve({
@@ -704,7 +705,8 @@ gulp.task('release', done => {
       }
       for (var release of values) {
         if (release.status === 'ok') {
-          release.path = release.path.substring(release.path.indexOf('/') + 1);
+          release.path = release.path.substring(
+            release.path.indexOf('/') + 1);
           releaseNotes.write(
             `<li class="ok">${release.os} <span class="status">${release.status}</span> <a href="${release.link}" class="build-link" data-os="${release.os}">Download</a></li>`);
         } else {
@@ -720,35 +722,24 @@ gulp.task('release', done => {
   });
 });
 
-gulp.task('build', gulp.series('set_mode', 'build_binaries'));
+// gulp.task('build', gulp.series('set_mode', 'build_binaries'));
 
 // utils
 
-function clean(target) {
-  console.log(`Removing ${BUILD_DIR}/${target.platform}-${target.arch}`);
-  return del(`${BUILD_DIR}/${target.platform}-${target.arch}`);
+function clean (target) {
+  const dir = path.join(BUILD_DIR, `${target.platform}-${target.arch}`);
+  console.log(`Removing ${dir}`);
+  return del(dir);
 }
 
 function packageApp (target) {
   console.log(`building: ${target.platform}-${target.arch}`);
   const opts = Object.assign({}, DEFAULT_OPTS, target, {
-    icon: './src/images/icon',//getIcon(target.platform),
-    // prune: true,
+    icon: getIcon(target.platform),
+    prune: true,
     out: `${BUILD_DIR}/${target.platform}-${target.arch}`
   });
-  return doPackage(opts);
-}
-
-function doPackage (opts) {
-  return new Promise((resolve, reject) => {
-    packager(opts, function(err, appPath) {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(appPath);
-      }
-    });
-  });
+  return packager(opts);
 }
 
 function getElectronVersion () {
