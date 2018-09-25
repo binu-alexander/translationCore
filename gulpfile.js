@@ -4,7 +4,6 @@ const argv = require('yargs').argv;
 const fs = require('fs-extra');
 const request = require('./scripts/request');
 const packager = require('electron-packager');
-// const change = require('gulp-change');
 const path = require('path');
 const rimraf = require('rimraf');
 const del = require('del');
@@ -33,7 +32,7 @@ const DEFAULT_OPTS = {
     BUILD_DIR,
     RELEASE_DIR,
     'scripts',
-    '\\.(?!env|npmrc)' // TRICKY: exclude hidden files except for .env files
+    '\\.(?!env|npmrc|babelrc)'
   ].concat(devDeps.map(name => `/node_modules/${name}($|/)`)),
   version: getElectronVersion(),
   'app-version': pkg.version
@@ -95,59 +94,6 @@ gulp.task('crowdin', () => {
   }
 });
 
-/**
- * set developer build properties
- * TRICKY: this will modify package.json.
- * however, these changes should not be committed to git.
- * As a safety net this will only run on travis.
- */
-// gulp.task('set_mode', () => {
-//   let p = require('./package');
-//   if (!process.env.TRAVIS) {
-//     console.log('Skipping build mode. On non-travis environment');
-//     return Promise.resolve();
-//   }
-//
-//   if (process.env.TRAVIS_TAG) {
-//     console.log('Tag mode');
-//     if (!process.env.TRAVIS_TAG.startsWith('v')) {
-//       return Promise.reject(`The tag must be prefixed with a "v".`);
-//     }
-//     if (process.env.TRAVIS_TAG !== `v${p.version}`) {
-//       return Promise.reject(
-//         `The package version does not match the tag name. Expected ${process.env.TRAVIS_TAG} but found ${p.version}`);
-//     }
-//   } else if (process.env.TRAVIS_BRANCH &&
-//     process.env.TRAVIS_BRANCH.startsWith('release-')) {
-//     console.log('Release mode');
-//     let branchVersion = process.env.TRAVIS_BRANCH.replace(/^release-/, '');
-//     if (!branchVersion.startsWith('v')) {
-//       return Promise.reject(
-//         `The release branch version must be prefixed with a "v".`);
-//     }
-//     if (branchVersion !== `v${p.version}`) {
-//       return Promise.reject(
-//         `The package version does not match the release branch version. Expected ${branchVersion} but found ${p.version}`);
-//     }
-//     return Promise.resolve();
-//   } else {
-//     console.log('Develop mode');
-//     p.developer_mode = true;
-//     if (process.env.TRAVIS_COMMIT) {
-//       p.version = p.version + '-' + process.env.TRAVIS_COMMIT.substring(0, 7);
-//     } else {
-//       p.version = p.version + '-dev';
-//     }
-//
-//     // write modifications to package
-//     return gulp.src(['package.json'])
-//       .pipe(change(() => {
-//         return JSON.stringify(p);
-//       }))
-//       .pipe(gulp.dest('./'));
-//   }
-// });
-
 gulp.task('clean', done => {
   rimraf.sync(BUILD_DIR);
   rimraf.sync(RELEASE_DIR);
@@ -162,14 +108,6 @@ function build (target) {
 }
 
 gulp.task('build', () => {
-  // let platforms = [];
-
-  // if (argv.win) platforms.push('win32');
-  // if (argv.osx) platforms.push('darwin'); // legacy
-  // if (argv.macos) platforms.push('darwin');
-  // if (argv.linux) platforms.push('linux');
-  // if (!platforms.length) platforms.push('win32', 'darwin', 'linux');
-
   if (!argv.platform) {
     throw new Error(
       'You must specify a platform. --platform (win32|darwin|linux)');
@@ -200,6 +138,8 @@ gulp.task('build', () => {
         prune: true,
         out: path.join(BUILD_DIR, `${target.platform}-${target.arch}`)
       });
+
+      // TRICKY: default ignores are not working yet.
       let ignored = Object.keys(pkg['devDependencies']).concat([
         '.github',
         'coverage',
@@ -215,12 +155,7 @@ gulp.task('build', () => {
         return new RegExp('(^/' + name + '|' + '^/node_modules/' + name + ')');
       });
 
-    return packager({
-      'asar': true,
-      'quiet': false,
-      'arch': 'x64',
-      'platform': 'linux',
-      'dir': '.',
+    return packager(Object.assign({}, opts, {
       'ignore': function(name) {
         for (let i = 0, len = ignored.length; i < len; ++i) {
           if (ignored[i].test(name)) {
@@ -231,10 +166,7 @@ gulp.task('build', () => {
 
         return false;
       },
-      'out': opts.out,
-      'app-version': pkg.version,
-      'icon': './src/images/icon'
-    });
+    }));
   });
 });
 
