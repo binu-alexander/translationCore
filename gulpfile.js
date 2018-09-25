@@ -135,7 +135,7 @@ gulp.task('build', () => {
     .then(() => {
       const opts = Object.assign({}, DEFAULT_OPTS, target, {
         icon: getIcon(target.platform),
-        prune: true,
+        prune: false,
         out: path.join(BUILD_DIR, `${target.platform}-${target.arch}`)
       });
 
