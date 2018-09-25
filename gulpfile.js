@@ -131,7 +131,7 @@ gulp.task('build', () => {
   //   });
 
   return clean(target)
-    // .then(() => installNodeGit(target))
+    .then(() => installNodeGit(target))
     .then(() => {
       const opts = Object.assign({}, DEFAULT_OPTS, target, {
         icon: getIcon(target.platform),
