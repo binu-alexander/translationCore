@@ -16,7 +16,7 @@ const devDeps = Object.keys(pkg.devDependencies);
 
 const BUILD_DIR = './out/';
 const RELEASE_DIR = './release/';
-const iconPath = 'src/images/icon'; // without extension
+const iconPath = 'dist/images/icon'; // without extension
 const DEFAULT_OPTS = {
   dir: '.',
   name: pkg.productName,
@@ -133,7 +133,9 @@ gulp.task('build', () => {
 
   return clean(target)
     .then(() => installNodeGit(target))
+    .then(() => compileJS())
     .then(() => {
+      console.log(`building: ${target.platform}-${target.arch}`);
       const opts = Object.assign({}, DEFAULT_OPTS, target, {
         icon: getIcon(target.platform),
         prune: false,
@@ -145,6 +147,7 @@ gulp.task('build', () => {
         '.github',
         'coverage',
         '.idea',
+        'src',
         '__tests__',
         '__mocks__',
         'vendor',
@@ -664,6 +667,11 @@ function clean (target) {
   const dir = path.join(BUILD_DIR, `${target.platform}-${target.arch}`);
   console.log(`Removing ${dir}`);
   return del(dir);
+}
+
+function compileJS () {
+  console.log(`Transpiling Javascript`);
+  return pexec(`npm run compile`);
 }
 
 function packageApp (target) {
