@@ -20,8 +20,8 @@ const iconPath = 'dist/images/icon'; // without extension
 const DEFAULT_OPTS = {
   dir: '.',
   name: pkg.productName,
-  asar: true,
-  quiet: true,
+  asar: false,
+  quiet: false,
   ignore: [
     '.github',
     'coverage',
@@ -139,7 +139,7 @@ gulp.task('build', () => {
       console.log(`building: ${target.platform}-${target.arch}`);
       const opts = Object.assign({}, DEFAULT_OPTS, target, {
         icon: getIcon(target.platform),
-        prune: false,
+        prune: true,
         out: path.join(BUILD_DIR, `${target.platform}-${target.arch}`)
       });
 
@@ -148,6 +148,8 @@ gulp.task('build', () => {
         '.github',
         'coverage',
         '.idea',
+        'jsdoc',
+        'testSetUp',
         'src',
         '__tests__',
         '__mocks__',
