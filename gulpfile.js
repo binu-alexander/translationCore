@@ -26,6 +26,7 @@ const DEFAULT_OPTS = {
     '.github',
     'coverage',
     '.idea',
+    'src',
     '__tests__',
     '__mocks__',
     'vendor',
